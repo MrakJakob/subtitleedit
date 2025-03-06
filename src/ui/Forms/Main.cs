@@ -51,6 +51,8 @@ using Nikse.SubtitleEdit.Forms.Tts;
 using CheckForUpdatesHelper = Nikse.SubtitleEdit.Logic.CheckForUpdatesHelper;
 using MessageBox = Nikse.SubtitleEdit.Forms.SeMsgBox.MessageBox;
 using Timer = System.Windows.Forms.Timer;
+using Nikse.SubtitleEdit.Controls.Interfaces;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
 
 namespace Nikse.SubtitleEdit.Forms
 {
@@ -37272,6 +37274,52 @@ namespace Nikse.SubtitleEdit.Forms
                     Cursor = Cursors.Default;
                 }
             }
+        }
+        private void audioToTextTrueBarToolStripItemClick(object sender, EventArgs e)
+        {
+            if (!string.IsNullOrEmpty(_videoFileName) &&
+               (_videoFileName.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                _videoFileName.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+            {
+                MessageBox.Show("SE cannot generate text from online video/audio");
+                return;
+            }
+
+            if (!ContinueNewOrExit())
+            {
+                return;
+            }
+
+            if (!RequireFfmpegOk())
+            {
+                return;
+            }
+
+            var oldVideoFileName = _videoFileName;
+            var isVlc = mediaPlayer.VideoPlayer is LibVlcDynamic;
+            if (isVlc)
+            {
+                CloseVideoToolStripMenuItemClick(sender, e);
+            }
+
+            TrueBarAPI apiService = new TrueBarAPI();
+
+            using (var form = new TrueBarAudioToText(oldVideoFileName, _subtitle, _videoAudioTrackNumber, this, apiService)) 
+            {
+                var result = form.ShowDialog(this);
+
+                if (isVlc)
+                {
+                    OpenVideo(oldVideoFileName);
+                }
+
+                if (result != DialogResult.OK)
+                {
+                    return;
+                }
+
+                SubtitleListview1.Fill(_subtitle, _subtitleOriginal);
+            }   
         }
     }
 }

@@ -77,6 +77,9 @@
     <Compile Update="Controls\SubtitleListView.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Update="Forms\AudioToText\TrueBarAudioToText.cs">
+      <CustomToolNamespace>Audio To Text </CustomToolNamespace>
+    </Compile>
     <Compile Update="Forms\ConvertActor.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -285,6 +288,7 @@
     </HunspellAssemblies>
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.CSharp" />
     <PackageReference Include="Microsoft.Net.Http" />
     <PackageReference Include="Microsoft.Win32.Registry" />
     <PackageReference Include="NAudio.Core" />
