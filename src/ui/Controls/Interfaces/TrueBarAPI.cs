@@ -56,12 +56,12 @@ namespace Nikse.SubtitleEdit.Controls.Interfaces
             catch (HttpRequestException ex)
             {
                 // Handle HTTP errors
-                return $"{ex.Message}";
+                return $"{{\"error\": \"{ex.Message}\"}}";
             }
             catch (Exception ex)
             {
                 // Handle unexpected errors
-                return $"{ex.Message}";
+                return $"{{\"error\": \"{ex.Message}\"}}";
             }
         }
 
@@ -96,13 +96,13 @@ namespace Nikse.SubtitleEdit.Controls.Interfaces
             }
             catch (HttpRequestException ex)
             {
-                // Handle HTTP errors
-                return $"{ex.Message}";
+                // Return the error message in json format
+                return $"{{\"error\": \"{ex.Message}\"}}";
             }
             catch (Exception ex)
             {
                 // Handle unexpected errors
-                return $"{ex.Message}";
+                return $"{{\"error\": \"{ex.Message}\"}}";
             }
 
         }
@@ -123,11 +123,11 @@ namespace Nikse.SubtitleEdit.Controls.Interfaces
             }
             catch (HttpRequestException ex)
             {
-                return $"{ex.Message}";
+                return $"{{\"error\": \"{ex.Message}\"}}";
             }
             catch (Exception ex)
             {
-                return $"{ex.Message}";
+                return $"{{\"error\": \"{ex.Message}\"}}";
             }
         }
 
@@ -147,11 +147,11 @@ namespace Nikse.SubtitleEdit.Controls.Interfaces
             }
             catch (HttpRequestException ex)
             {
-                return $"{ex.Message}";
+                return $"{{\"error\": \"{ex.Message}\"}}";
             }
             catch (Exception ex)
             {
-                return $"{ex.Message}";
+                return $"{{\"error\": \"{ex.Message}\"}}";
             }
         }
     }
