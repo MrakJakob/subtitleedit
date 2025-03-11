@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using MessageBox = Nikse.SubtitleEdit.Forms.SeMsgBox.MessageBox;
 using Nikse.SubtitleEdit.Core.Forms;
+using Nikse.SubtitleEdit.Core.AudioToText;
 
 namespace Nikse.SubtitleEdit.Forms.AudioToText
 {
@@ -279,7 +280,6 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             return status?.status == "FINISHED";
         }
 
-
         private async Task RetrieveTranscriptionAsync()
         {
             try
@@ -290,6 +290,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                 // Display or process the transcription
                 MessageBox.Show("Transcription completed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 LoadTranscriptionIntoSubtitle(transcription);
+              
                 _processing = false;
                 DialogResult = DialogResult.OK; // Close the modal with OK result
                 Close();
@@ -316,24 +317,42 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
 
                 foreach (var transcriptionSegment in transcriptionSegments)
                 {
-                    transcriptionSegment.content = transcriptionSegment.content.Replace("\\\"", "\""); // Fix escaped quotes
-                    List<SubtitleDetails> subtitles = JsonConvert.DeserializeObject<List<SubtitleDetails>>(transcriptionSegment.content);
+                    transcriptionSegment.Content = transcriptionSegment.Content.Replace("\\\"", "\""); // Fix escaped quotes
+                    List<SubtitleDetails> subtitles = JsonConvert.DeserializeObject<List<SubtitleDetails>>(transcriptionSegment.Content);
 
                     foreach (var subtitle in subtitles)
                     {
                         var paragraph = new Paragraph
                         {
-                            StartTime = new TimeCode(subtitle.startTime * 1000), // Convert seconds to milliseconds
-                            EndTime = new TimeCode(subtitle.endTime * 1000),     // Convert seconds to milliseconds
-                            Text = subtitle.text
+                            StartTime = new TimeCode(subtitle.StartTime * 1000), // Convert seconds to milliseconds
+                            EndTime = new TimeCode(subtitle.EndTime * 1000),     // Convert seconds to milliseconds
+                            Text = subtitle.Text
                         };
                         _subtitle.Paragraphs.Add(paragraph);
                     }
                 }
+                // Post-process the transcription
+                var postProcessor = new AudioToTextPostProcessor("sl")
+                {
+                    ParagraphMaxChars = Configuration.Settings.General.SubtitleLineMaximumLength * 2,
+                };
+                var fixedSubtitles = postProcessor.Fix(
+                _subtitle,
+                true,
+                false,
+                Configuration.Settings.Tools.WhisperPostProcessingMergeLines,
+                false,
+                Configuration.Settings.Tools.WhisperPostProcessingFixShortDuration,
+                Configuration.Settings.Tools.WhisperPostProcessingSplitLines,
+                AudioToTextPostProcessor.Engine.Whisper);
+                // Fix(Engine engine, Subtitle input, bool usePostProcessing, bool addPeriods, bool mergeLines, bool fixCasing, bool fixShortDuration, bool splitLines)
                 // Merge lines with same time codes
-                var mergedSubtitle = MergeLinesWithSameTimeCodes.Merge(_subtitle, new List<int>(), out _, true, false, true, 1000, "en", new List<int>(), new Dictionary<int, bool>(), new Subtitle());
+                var mergedSubtitle = MergeLinesWithSameTimeCodes.Merge(fixedSubtitles, new List<int>(), out _, true, false, true, 1000, "en", new List<int>(), new Dictionary<int, bool>(), new Subtitle());
                 // Fix long and short display times
                 var fixedAndMergedSubtitle = _fixDurationLimits.Fix(mergedSubtitle);
+                // _subtitle.Paragraphs.Clear();
+                // _subtitle.Paragraphs.AddRange(fixedAndMergedSubtitle.Paragraphs);
+
                 _subtitle.Paragraphs.Clear();
                 _subtitle.Paragraphs.AddRange(fixedAndMergedSubtitle.Paragraphs);
             }
@@ -521,22 +540,22 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
 
 public class SubtitleItem
 {
-    public int id { get; set; }
-    public string content { get; set; }
+    public int Id { get; set; }
+    public string Content { get; set; }
 }
 
 public class SubtitleDetails
 {
-    public string text { get; set; }
-    public double startTime { get; set; }
-    public double endTime { get; set; }
-    public bool spaceBefore { get; set; }
-    public string speakerCode { get; set; }
-    public Metadata metadata { get; set; }
+    public string Text { get; set; }
+    public double StartTime { get; set; }
+    public double EndTime { get; set; }
+    public bool SpaceBefore { get; set; }
+    public string SpeakerCode { get; set; }
+    public Metadata Metadata { get; set; }
 }
 
 public class Metadata
 {
-    public bool? postCapitalized { get; set; }
-    public string source { get; set; }
+    public bool? PostCapitalized { get; set; }
+    public string Source { get; set; }
 }
