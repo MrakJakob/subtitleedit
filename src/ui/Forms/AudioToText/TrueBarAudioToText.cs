@@ -10,6 +10,8 @@ using System.Windows.Forms;
 using MessageBox = Nikse.SubtitleEdit.Forms.SeMsgBox.MessageBox;
 using Nikse.SubtitleEdit.Core.Forms;
 using Nikse.SubtitleEdit.Core.AudioToText;
+using System.Linq;
+using Nikse.SubtitleEdit.Core.SubtitleFormats;
 
 namespace Nikse.SubtitleEdit.Forms.AudioToText
 {
@@ -23,8 +25,10 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
         private readonly Form _parentForm;
         private string _accessToken;
         private string _sessionId;
-        private Timer _statusCheckTimer;
+        private string _jobId;
+        private readonly Timer _statusCheckTimer;
         private readonly TrueBarAPI _trueBarAPI;
+        private readonly TrueBarSubtitlerAPI _trueBarSubtitlerAPI;
         private readonly SubtitleListView _subtitleListView1;
         private readonly FixDurationLimits _fixDurationLimits;
         bool _processing = false;
@@ -52,6 +56,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             _audioTrackNumber = audioTrackNumber;
             _parentForm = parentForm;
             _trueBarAPI = trueBarAPI;
+            _trueBarSubtitlerAPI = new TrueBarSubtitlerAPI();
             _statusCheckTimer = new Timer
             {
                 Interval = 1000
@@ -143,7 +148,8 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             username.Name = "username";
             username.Size = new System.Drawing.Size(127, 20);
             username.TabIndex = 12;
-            username.Text = "jakob.mrak";
+            // username.Text = Environment.GetEnvironmentVariable("MY_APP_USERNAME");
+
             // 
             // password
             // 
@@ -152,7 +158,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             password.PasswordChar = '*';
             password.Size = new System.Drawing.Size(127, 20);
             password.TabIndex = 13;
-            password.Text = "78Yio$3rt";
+            // password.Text = Environment.GetEnvironmentVariable("MY_APP_PASSWORD");
             password.UseSystemPasswordChar = true;
             // 
             // linkLabel1
@@ -218,6 +224,135 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
 
         }
 
+        // Login to the True-bar (Subtitler) API
+        private async void LoginButton_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(username.Text) || string.IsNullOrWhiteSpace(password.Text))
+            {
+                MessageBox.Show("Please enter username and password");
+                return;
+            }
+
+            // if (!await _trueBarAPI.IsApiServerReachableAsync())
+            // {
+            //     MessageBox.Show("No internet connection!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            //     return;
+            // }
+
+            // disable the login button while the request is in progress
+            _processing = true;
+            LoginButton.Enabled = false;
+            // TODO: handle session expiration
+
+            // string response = await _trueBarAPI.Login(username.Text, password.Text);
+
+            // Call the new Subtitler API to login
+            string response = await _trueBarSubtitlerAPI.Login(username.Text, password.Text);
+
+            try
+            {
+                var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
+                _processing = false;
+
+                if (jsonResponse.ContainsKey("access_token"))
+                {
+                    string accessToken = jsonResponse["access_token"];
+                    MessageBox.Show("Login successful!");
+                    // Put focus on the generate button
+                    generate.Focus();
+                    // Store the access token securely (e.g., in-memory or a secure storage)
+                    _accessToken = accessToken;
+                }
+                else if (jsonResponse.ContainsKey("error"))
+                {
+                    MessageBox.Show("Login failed: " + jsonResponse["error"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    LoginButton.Enabled = true;
+                }
+                else
+                {
+                    MessageBox.Show("Unexpected response: " + response, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    LoginButton.Enabled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error processing response: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private async void Generate_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_accessToken))
+            {
+                MessageBox.Show("Please login first!");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_videoFileName))
+            {
+                MessageBox.Show("Please select a video file first!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!await _trueBarAPI.IsApiServerReachableAsync())
+            {
+                MessageBox.Show("No internet connection!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Disable the generate button while the request is in progress
+            _processing = true;
+            generate.Enabled = false;
+            progressBar1.Visible = true;
+            progressBar1.Style = ProgressBarStyle.Marquee;
+
+            // Call the True-bar API to generate text from audio
+            // string response = await _trueBarAPI.UploadFileAsync(_accessToken, _videoFileName);
+
+
+            try
+            {
+                string response = await _trueBarSubtitlerAPI.UploadFileAsync(_accessToken, _videoFileName);
+                var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
+                // MessageBox.Show("Response: " + response);   
+                // if (jsonResponse.ContainsKey("sessionId"))
+                // {
+                //     // Store the session ID securely 
+                //     _sessionId = jsonResponse["sessionId"];
+                //     _statusCheckTimer.Start();
+                //     // transcription is in progress   
+                // }
+                if (jsonResponse.ContainsKey("job_id"))
+                {
+                    // Store the session ID securely 
+                    _jobId = jsonResponse["job_id"];
+                    _statusCheckTimer.Start();
+                    // transcription is in progress   
+                }
+                else if (jsonResponse.ContainsKey("error"))
+                {
+                    MessageBox.Show("Upload failed: " + jsonResponse["error"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    _processing = false;
+                    generate.Enabled = true;
+                    progressBar1.Visible = false;
+                }
+                else
+                {
+                    MessageBox.Show("Unexpected response: " + response, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _processing = false;
+                    generate.Enabled = true;
+                    progressBar1.Visible = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error processing response: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _processing = false;
+                generate.Enabled = true;
+                progressBar1.Visible = false;
+            }
+        }
+
         private int GetProgress(string statusResponse)
         {
             // Parse the response to determine the progress
@@ -236,71 +371,116 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             return (int)(100 * processedSeconds / recordedSeconds);
         }
 
+        public Subtitle LoadWebVttFromJson(string webVTTcontent)
+        {
+            // Load the WebVTT content into a Subtitle object
+            var subtitle = new Subtitle();
+            var webVttFormat = new WebVTT();
+            var lines = webVTTcontent.SplitToLines();
+            webVttFormat.LoadSubtitle(subtitle, lines, null);
+
+            return subtitle;
+        }
+
+        private void GetSubtitlesFromResponse(string statusResponse)
+        {
+            var status = JsonConvert.DeserializeObject<dynamic>(statusResponse);
+            var subtitles = status?.webvtt;
+            if (subtitles == null)
+            {
+                MessageBox.Show("No subtitles found in the response", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            List<SubtitleResponse> webvtt = JsonConvert.DeserializeObject<List<SubtitleResponse>>(subtitles.ToString());
+
+            if (webvtt == null || webvtt.Count == 0)
+            {
+                MessageBox.Show("No subtitle items found in the response", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var webVTTsubtitles = LoadWebVttFromJson(webvtt[0].Content);
+            _subtitle.Paragraphs.Clear();
+            _subtitle.Paragraphs.AddRange(webVTTsubtitles.Paragraphs);
+
+
+
+            MessageBox.Show("Transcription completed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _processing = false;
+            DialogResult = DialogResult.OK; // Close the modal with OK result
+            Close();
+        }
         private async void StatusCheckTimer_Tick(object sender, EventArgs e)
         {
             try
             {
+                label4.Text = "Uploading...";
                 // Call the API to check the transcription status
-                var statusResponse = await _trueBarAPI.CheckSessionStatusAsync(_sessionId, _accessToken);
+                var statusResponse = await _trueBarSubtitlerAPI.CheckJobStatus(_accessToken, _jobId);
 
-                int progress = GetProgress(statusResponse);
 
-                if (progress == -1)
+                progressBar1.Style = ProgressBarStyle.Marquee;
+
+                var transcriptionStatus = CheckTranscriptionStatus(statusResponse);
+
+                switch (transcriptionStatus)
                 {
-                    // Animate the progress bar during uploading
-                    label4.Text = "Uploading...";
-                    progressBar1.Style = ProgressBarStyle.Marquee;
-                }
-                else
-                {
-                    label4.Text = "Transcription progress...";
-                    progressBar1.Style = ProgressBarStyle.Continuous;
-                    progressBar1.Value = progress;
-                    label5.Text = progress + " %";
+                    case "started":
+                        // Update the progress bar
+                        label4.Text = "Transcribing...";
+                        break;
+                    case "finished":
+                        _statusCheckTimer.Stop(); // Stop the timer
+                        // Retrieve the transcription
+                        GetSubtitlesFromResponse(statusResponse);
+                        break;
+                    case "failed":
+                        _statusCheckTimer.Stop(); // Stop the timer
+                        _processing = false;
+                        MessageBox.Show("Transcription failed!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        break;
+                    default:
+                        // Handle other statuses
+                        MessageBox.Show($"Transcription status: {transcriptionStatus}", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        break;
                 }
 
-
-                // Parse the response to check if the transcription is complete
-                if (IsTranscriptionComplete(statusResponse))
-                {
-                    _statusCheckTimer.Stop(); // Stop the timer
-                    await RetrieveTranscriptionAsync(); // Retrieve the transcription
-                }
             }
             catch (Exception ex)
             {
                 _statusCheckTimer.Stop(); // Stop the timer on error
+                _processing = false;
                 MessageBox.Show($"An error occurred while checking the status: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private bool IsTranscriptionComplete(string statusResponse)
+        private string CheckTranscriptionStatus(string statusResponse)
         {
             var status = JsonConvert.DeserializeObject<dynamic>(statusResponse);
-            return status?.status == "FINISHED";
+            return status?.status;
         }
 
-        private async Task RetrieveTranscriptionAsync()
-        {
-            try
-            {
-                // Call the API to retrieve the transcription
-                var transcription = await _trueBarAPI.GetSessionTranscriptAsync(_sessionId, _accessToken);
+        // private async Task RetrieveTranscriptionAsync()
+        // {
+        //     try
+        //     {
+        //         // Call the API to retrieve the transcription
+        //         var transcription = await _trueBarAPI.GetSessionTranscriptAsync(_sessionId, _accessToken);
 
-                // Display or process the transcription
-                MessageBox.Show("Transcription completed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                LoadTranscriptionIntoSubtitle(transcription);
-              
-                _processing = false;
-                DialogResult = DialogResult.OK; // Close the modal with OK result
-                Close();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while retrieving the transcription: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                generate.Enabled = true; // Re-enable the generate button
-            }
-        }
+        //         // Display or process the transcription
+        //         MessageBox.Show("Transcription completed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        //         LoadTranscriptionIntoSubtitle(transcription);
+
+        //         _processing = false;
+        //         DialogResult = DialogResult.OK; // Close the modal with OK result
+        //         Close();
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         MessageBox.Show($"An error occurred while retrieving the transcription: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        //         generate.Enabled = true; // Re-enable the generate button
+        //     }
+        // }
 
         public void LoadTranscriptionIntoSubtitle(string transcriptionJson)
         {
@@ -413,122 +593,6 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             }
         }
 
-        private async void Generate_Click(object sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(_accessToken))
-            {
-                MessageBox.Show("Please login first!");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(_videoFileName))
-            {
-                MessageBox.Show("Please select a video file first!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            if (!await _trueBarAPI.IsApiServerReachableAsync())
-            {
-                MessageBox.Show("No internet connection!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // Disable the generate button while the request is in progress
-            _processing = true;
-            generate.Enabled = false;
-            progressBar1.Visible = true;
-            progressBar1.Style = ProgressBarStyle.Marquee;
-
-            // Call the True-bar API to generate text from audio
-            string response = await _trueBarAPI.UploadFileAsync(_accessToken, _videoFileName);
-
-            try
-            {
-                var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
-                // MessageBox.Show("Response: " + response);   
-                if (jsonResponse.ContainsKey("sessionId"))
-                {
-                    // Store the session ID securely 
-                    _sessionId = jsonResponse["sessionId"];
-                    _statusCheckTimer.Start();
-                    // transcription is in progress   
-                }
-                else if (jsonResponse.ContainsKey("error"))
-                {
-                    MessageBox.Show("Upload failed: " + jsonResponse["error"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    _processing = false;
-                    generate.Enabled = true;
-                    progressBar1.Visible = false;
-                }
-                else
-                {
-                    MessageBox.Show("Unexpected response: " + response, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    _processing = false;
-                    generate.Enabled = true;
-                    progressBar1.Visible = false;
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error processing response: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _processing = false;
-                generate.Enabled = true;
-                progressBar1.Visible = false;
-            }
-        }
-
-        private async void LoginButton_Click(object sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(username.Text) || string.IsNullOrWhiteSpace(password.Text))
-            {
-                MessageBox.Show("Please enter username and password");
-                return;
-            }
-
-            if (!await _trueBarAPI.IsApiServerReachableAsync())
-            {
-                MessageBox.Show("No internet connection!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // disable the login button while the request is in progress
-            _processing = true;
-            LoginButton.Enabled = false;
-            // TODO: handle session expiration
-
-            string response = await _trueBarAPI.Login(username.Text, password.Text);
-
-            try
-            {
-                var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
-                _processing = false;
-
-                if (jsonResponse.ContainsKey("access_token"))
-                {
-                    string accessToken = jsonResponse["access_token"];
-                    MessageBox.Show("Login successful!");
-                    // Put focus on the generate button
-                    generate.Focus();
-                    // Store the access token securely (e.g., in-memory or a secure storage)
-                    _accessToken = accessToken;
-                }
-                else if (jsonResponse.ContainsKey("error"))
-                {
-                    MessageBox.Show("Login failed: " + jsonResponse["error"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    LoginButton.Enabled = true;
-                }
-                else
-                {
-                    MessageBox.Show("Unexpected response: " + response, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    LoginButton.Enabled = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error processing response: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
         private void LinkLabel_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             // open the True-bar website
@@ -537,6 +601,11 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
     }
 }
 
+public class SubtitleResponse
+{
+    public string LanguageCode { get; set; }
+    public string Content { get; set; }
+}
 
 public class SubtitleItem
 {
