@@ -37302,7 +37302,7 @@ namespace Nikse.SubtitleEdit.Forms
                 CloseVideoToolStripMenuItemClick(sender, e);
             }
 
-            TrueBarAPI apiService = new TrueBarAPI();
+            TrueBarSubtitlerAPI apiService = new TrueBarSubtitlerAPI();
 
             using (var form = new TrueBarAudioToText(oldVideoFileName, _subtitle, _videoAudioTrackNumber, this, apiService)) 
             {

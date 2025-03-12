@@ -12,12 +12,16 @@ using Nikse.SubtitleEdit.Core.Forms;
 using Nikse.SubtitleEdit.Core.AudioToText;
 using System.Linq;
 using Nikse.SubtitleEdit.Core.SubtitleFormats;
+using System.Text;
+using System.IO;
+using System.Diagnostics;
 
 namespace Nikse.SubtitleEdit.Forms.AudioToText
 {
     public sealed partial class TrueBarAudioToText : Form
     {
         private readonly string _videoFileName;
+        private string _audioFileName;
         private readonly Subtitle _subtitle;
         private readonly bool _isVideo;
         private readonly bool _isAudio;
@@ -32,6 +36,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
         private readonly SubtitleListView _subtitleListView1;
         private readonly FixDurationLimits _fixDurationLimits;
         bool _processing = false;
+        private readonly List<string> _filesToDelete;
         private Button generate;
         private Label label1;
         private Button LoginButton;
@@ -43,9 +48,16 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
         private ProgressBar progressBar1;
         private Label label4;
         private Label label5;
+        private Label label6;
+        private CheckBox checkBox1;
+        private CheckBox checkBox2;
+        private CheckBox checkBox3;
+        private CheckBox checkBox4;
+        private ComboBox comboBox1;
+        private CheckBox checkBox5;
         private Button cancel;
 
-        public TrueBarAudioToText(string videoFileName, Subtitle subtitle, int audioTrackNumber, Form parentForm, TrueBarAPI trueBarAPI)
+        public TrueBarAudioToText(string videoFileName, Subtitle subtitle, int audioTrackNumber, Form parentForm, TrueBarSubtitlerAPI trueBarSubtitlerAPI)
         {
             UiUtil.PreInitialize(this);
             InitializeComponent();
@@ -55,174 +67,415 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             _subtitle = subtitle;
             _audioTrackNumber = audioTrackNumber;
             _parentForm = parentForm;
-            _trueBarAPI = trueBarAPI;
-            _trueBarSubtitlerAPI = new TrueBarSubtitlerAPI();
+            _trueBarSubtitlerAPI = trueBarSubtitlerAPI;
             _statusCheckTimer = new Timer
             {
                 Interval = 1000
             };
             _statusCheckTimer.Tick += StatusCheckTimer_Tick;
-            _subtitleListView1 = new SubtitleListView();
-            _fixDurationLimits = new FixDurationLimits(Configuration.Settings.General.SubtitleMinimumDisplayMilliseconds, Configuration.Settings.General.SubtitleMaximumDisplayMilliseconds, new List<double>());
+            
+            _filesToDelete = new List<string>();
             username.TabIndex = 0;
         }
 
+
         public void InitializeComponent()
         {
-            cancel = new Button();
-            generate = new Button();
-            label1 = new Label();
-            LoginButton = new Button();
-            label2 = new Label();
-            label3 = new Label();
-            username = new TextBox();
-            password = new TextBox();
-            linkLabel1 = new LinkLabel();
-            progressBar1 = new ProgressBar();
-            label4 = new Label();
-            label5 = new Label();
-            SuspendLayout();
+            this.cancel = new System.Windows.Forms.Button();
+            this.generate = new System.Windows.Forms.Button();
+            this.label1 = new System.Windows.Forms.Label();
+            this.LoginButton = new System.Windows.Forms.Button();
+            this.label2 = new System.Windows.Forms.Label();
+            this.label3 = new System.Windows.Forms.Label();
+            this.username = new System.Windows.Forms.TextBox();
+            this.password = new System.Windows.Forms.TextBox();
+            this.linkLabel1 = new System.Windows.Forms.LinkLabel();
+            this.progressBar1 = new System.Windows.Forms.ProgressBar();
+            this.label4 = new System.Windows.Forms.Label();
+            this.label5 = new System.Windows.Forms.Label();
+            this.label6 = new System.Windows.Forms.Label();
+            this.checkBox1 = new System.Windows.Forms.CheckBox();
+            this.checkBox2 = new System.Windows.Forms.CheckBox();
+            this.checkBox3 = new System.Windows.Forms.CheckBox();
+            this.checkBox4 = new System.Windows.Forms.CheckBox();
+            this.comboBox1 = new System.Windows.Forms.ComboBox();
+            this.checkBox5 = new System.Windows.Forms.CheckBox();
+            this.SuspendLayout();
             // 
             // cancel
             // 
-            cancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            cancel.Location = new System.Drawing.Point(381, 237);
-            cancel.Name = "cancel";
-            cancel.Size = new System.Drawing.Size(134, 26);
-            cancel.TabIndex = 0;
-            cancel.Text = "Cancel";
-            cancel.UseVisualStyleBackColor = true;
-            cancel.Click += new System.EventHandler(Cancel_Click);
+            this.cancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.cancel.Location = new System.Drawing.Point(381, 323);
+            this.cancel.Name = "cancel";
+            this.cancel.Size = new System.Drawing.Size(134, 26);
+            this.cancel.TabIndex = 0;
+            this.cancel.Text = "Cancel";
+            this.cancel.UseVisualStyleBackColor = true;
+            this.cancel.Click += new System.EventHandler(this.Cancel_Click);
             // 
             // generate
             // 
-            generate.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            generate.Location = new System.Drawing.Point(241, 237);
-            generate.Name = "generate";
-            generate.Size = new System.Drawing.Size(134, 26);
-            generate.TabIndex = 1;
-            generate.Text = "Generate";
-            generate.UseVisualStyleBackColor = true;
-            generate.Click += new System.EventHandler(Generate_Click);
+            this.generate.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.generate.Location = new System.Drawing.Point(241, 323);
+            this.generate.Name = "generate";
+            this.generate.Size = new System.Drawing.Size(134, 26);
+            this.generate.TabIndex = 1;
+            this.generate.Text = "Generate";
+            this.generate.UseVisualStyleBackColor = true;
+            this.generate.Click += new System.EventHandler(this.Generate_Click);
             // 
             // label1
             // 
-            label1.AutoSize = true;
-            label1.Location = new System.Drawing.Point(12, 40);
-            label1.Name = "label1";
-            label1.Size = new System.Drawing.Size(276, 13);
-            label1.TabIndex = 3;
-            label1.Text = "Generate text from audio via True-bar speech recognition";
+            this.label1.AutoSize = true;
+            this.label1.Location = new System.Drawing.Point(12, 40);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(276, 13);
+            this.label1.TabIndex = 3;
+            this.label1.Text = "Generate text from audio via True-bar speech recognition";
             // 
             // LoginButton
             // 
-            LoginButton.Location = new System.Drawing.Point(297, 141);
-            LoginButton.Name = "LoginButton";
-            LoginButton.Size = new System.Drawing.Size(134, 26);
-            LoginButton.TabIndex = 9;
-            LoginButton.Text = "Login";
-            LoginButton.UseVisualStyleBackColor = true;
-            LoginButton.Click += new System.EventHandler(LoginButton_Click);
+            this.LoginButton.Location = new System.Drawing.Point(381, 137);
+            this.LoginButton.Name = "LoginButton";
+            this.LoginButton.Size = new System.Drawing.Size(134, 26);
+            this.LoginButton.TabIndex = 9;
+            this.LoginButton.Text = "Login";
+            this.LoginButton.UseVisualStyleBackColor = true;
+            this.LoginButton.Click += new System.EventHandler(this.LoginButton_Click);
             // 
             // label2
             // 
-            label2.AutoSize = true;
-            label2.Location = new System.Drawing.Point(12, 125);
-            label2.Name = "label2";
-            label2.Size = new System.Drawing.Size(55, 13);
-            label2.TabIndex = 10;
-            label2.Text = "Username";
+            this.label2.AutoSize = true;
+            this.label2.Location = new System.Drawing.Point(12, 116);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(55, 13);
+            this.label2.TabIndex = 10;
+            this.label2.Text = "Username";
             // 
             // label3
             // 
-            label3.AutoSize = true;
-            label3.Location = new System.Drawing.Point(145, 125);
-            label3.Name = "label3";
-            label3.Size = new System.Drawing.Size(53, 13);
-            label3.TabIndex = 11;
-            label3.Text = "Password";
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(185, 116);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(53, 13);
+            this.label3.TabIndex = 11;
+            this.label3.Text = "Password";
             // 
             // username
             // 
-            username.Location = new System.Drawing.Point(15, 141);
-            username.Name = "username";
-            username.Size = new System.Drawing.Size(127, 20);
-            username.TabIndex = 12;
-            // username.Text = Environment.GetEnvironmentVariable("MY_APP_USERNAME");
-
+            this.username.Location = new System.Drawing.Point(15, 141);
+            this.username.Name = "username";
+            this.username.Size = new System.Drawing.Size(155, 20);
+            this.username.TabIndex = 12;
             // 
             // password
             // 
-            password.Location = new System.Drawing.Point(148, 141);
-            password.Name = "password";
-            password.PasswordChar = '*';
-            password.Size = new System.Drawing.Size(127, 20);
-            password.TabIndex = 13;
-            // password.Text = Environment.GetEnvironmentVariable("MY_APP_PASSWORD");
-            password.UseSystemPasswordChar = true;
+            this.password.Location = new System.Drawing.Point(188, 141);
+            this.password.Name = "password";
+            this.password.PasswordChar = '*';
+            this.password.Size = new System.Drawing.Size(155, 20);
+            this.password.TabIndex = 13;
+            this.password.UseSystemPasswordChar = true;
             // 
             // linkLabel1
             // 
-            linkLabel1.AutoSize = true;
-            linkLabel1.Location = new System.Drawing.Point(12, 64);
-            linkLabel1.Name = "linkLabel1";
-            linkLabel1.Size = new System.Drawing.Size(86, 13);
-            linkLabel1.TabIndex = 14;
-            linkLabel1.TabStop = true;
-            linkLabel1.Text = "True-bar website";
-            linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(LinkLabel_LinkClicked);
+            this.linkLabel1.AutoSize = true;
+            this.linkLabel1.Location = new System.Drawing.Point(12, 64);
+            this.linkLabel1.Name = "linkLabel1";
+            this.linkLabel1.Size = new System.Drawing.Size(86, 13);
+            this.linkLabel1.TabIndex = 14;
+            this.linkLabel1.TabStop = true;
+            this.linkLabel1.Text = "True-bar website";
+            this.linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.LinkLabel_LinkClicked);
             // 
             // progressBar1
             // 
-            progressBar1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            progressBar1.Location = new System.Drawing.Point(15, 249);
-            progressBar1.Name = "progressBar1";
-            progressBar1.Size = new System.Drawing.Size(206, 14);
-            progressBar1.TabIndex = 15;
-            progressBar1.Visible = false;
+            this.progressBar1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.progressBar1.Location = new System.Drawing.Point(15, 335);
+            this.progressBar1.Name = "progressBar1";
+            this.progressBar1.Size = new System.Drawing.Size(206, 14);
+            this.progressBar1.TabIndex = 15;
+            this.progressBar1.Visible = false;
             // 
             // label4
             // 
-            label4.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            label4.AutoSize = true;
-            label4.Location = new System.Drawing.Point(12, 233);
-            label4.Name = "label4";
-            label4.Size = new System.Drawing.Size(0, 13);
-            label4.TabIndex = 16;
+            this.label4.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.label4.AutoSize = true;
+            this.label4.Location = new System.Drawing.Point(12, 319);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(0, 13);
+            this.label4.TabIndex = 16;
             // 
             // label5
             // 
-            label5.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            label5.AutoSize = true;
-            label5.Location = new System.Drawing.Point(185, 233);
-            label5.Name = "label5";
-            label5.Size = new System.Drawing.Size(0, 13);
-            label5.TabIndex = 17;
+            this.label5.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(185, 319);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(0, 13);
+            this.label5.TabIndex = 17;
+            // 
+            // label6
+            // 
+            this.label6.AutoSize = true;
+            this.label6.Location = new System.Drawing.Point(12, 180);
+            this.label6.Name = "label6";
+            this.label6.Size = new System.Drawing.Size(45, 13);
+            this.label6.TabIndex = 19;
+            this.label6.Text = "Settings";
+            // 
+            // checkBox1
+            // 
+            this.checkBox1.AutoSize = true;
+            this.checkBox1.Checked = true;
+            this.checkBox1.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkBox1.Location = new System.Drawing.Point(15, 206);
+            this.checkBox1.Name = "checkBox1";
+            this.checkBox1.Size = new System.Drawing.Size(139, 17);
+            this.checkBox1.TabIndex = 20;
+            this.checkBox1.Text = "Voice Activity Detection";
+            this.checkBox1.UseVisualStyleBackColor = true;
+            // 
+            // checkBox2
+            // 
+            this.checkBox2.AutoSize = true;
+            this.checkBox2.Checked = true;
+            this.checkBox2.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkBox2.Location = new System.Drawing.Point(15, 229);
+            this.checkBox2.Name = "checkBox2";
+            this.checkBox2.Size = new System.Drawing.Size(83, 17);
+            this.checkBox2.TabIndex = 21;
+            this.checkBox2.Text = "Punctuation";
+            this.checkBox2.UseVisualStyleBackColor = true;
+            // 
+            // checkBox3
+            // 
+            this.checkBox3.AutoSize = true;
+            this.checkBox3.Checked = true;
+            this.checkBox3.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkBox3.Location = new System.Drawing.Point(15, 252);
+            this.checkBox3.Name = "checkBox3";
+            this.checkBox3.Size = new System.Drawing.Size(101, 17);
+            this.checkBox3.TabIndex = 22;
+            this.checkBox3.Text = "Denormalization";
+            this.checkBox3.UseVisualStyleBackColor = true;
+            // 
+            // checkBox4
+            // 
+            this.checkBox4.AutoSize = true;
+            this.checkBox4.Checked = true;
+            this.checkBox4.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkBox4.Location = new System.Drawing.Point(15, 275);
+            this.checkBox4.Name = "checkBox4";
+            this.checkBox4.Size = new System.Drawing.Size(155, 17);
+            this.checkBox4.TabIndex = 23;
+            this.checkBox4.Text = "Speaker Change Detection";
+            this.checkBox4.UseVisualStyleBackColor = true;
+            // 
+            // comboBox1
+            // 
+            this.comboBox1.Enabled = false;
+            this.comboBox1.FormattingEnabled = true;
+            this.comboBox1.Location = new System.Drawing.Point(209, 204);
+            this.comboBox1.Name = "comboBox1";
+            this.comboBox1.Size = new System.Drawing.Size(134, 21);
+            this.comboBox1.TabIndex = 24;
+            this.comboBox1.Text = "Slovenščina (sl-SI)";
+            // 
+            // checkBox5
+            // 
+            this.checkBox5.AutoSize = true;
+            this.checkBox5.Enabled = false;
+            this.checkBox5.Location = new System.Drawing.Point(381, 206);
+            this.checkBox5.Name = "checkBox5";
+            this.checkBox5.Size = new System.Drawing.Size(119, 17);
+            this.checkBox5.TabIndex = 25;
+            this.checkBox5.Text = "Translate to English";
+            this.checkBox5.UseVisualStyleBackColor = true;
             // 
             // TrueBarAudioToText
             // 
-            ClientSize = new System.Drawing.Size(527, 275);
-            Controls.Add(label5);
-            Controls.Add(label4);
-            Controls.Add(progressBar1);
-            Controls.Add(linkLabel1);
-            Controls.Add(password);
-            Controls.Add(username);
-            Controls.Add(label3);
-            Controls.Add(label2);
-            Controls.Add(LoginButton);
-            Controls.Add(label1);
-            Controls.Add(generate);
-            Controls.Add(cancel);
-            MaximumSize = new System.Drawing.Size(543, 314);
-            MinimumSize = new System.Drawing.Size(543, 314);
-            Name = "TrueBarAudioToText";
-            ShowIcon = false;
-            Text = "Audio To Text";
-            ResumeLayout(false);
-            PerformLayout();
+            this.ClientSize = new System.Drawing.Size(527, 361);
+            this.Controls.Add(this.checkBox5);
+            this.Controls.Add(this.comboBox1);
+            this.Controls.Add(this.checkBox4);
+            this.Controls.Add(this.checkBox3);
+            this.Controls.Add(this.checkBox2);
+            this.Controls.Add(this.checkBox1);
+            this.Controls.Add(this.label6);
+            this.Controls.Add(this.label5);
+            this.Controls.Add(this.label4);
+            this.Controls.Add(this.progressBar1);
+            this.Controls.Add(this.linkLabel1);
+            this.Controls.Add(this.password);
+            this.Controls.Add(this.username);
+            this.Controls.Add(this.label3);
+            this.Controls.Add(this.label2);
+            this.Controls.Add(this.LoginButton);
+            this.Controls.Add(this.label1);
+            this.Controls.Add(this.generate);
+            this.Controls.Add(this.cancel);
+            this.MaximumSize = new System.Drawing.Size(543, 400);
+            this.MinimumSize = new System.Drawing.Size(543, 400);
+            this.Name = "TrueBarAudioToText";
+            this.ShowIcon = false;
+            this.Text = "Audio To Text";
+            this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
+
+        // THIS CODE IS REUSED FROM THE WHISPER AUDIO TO TEXT FORM (START)
+        private Process GetFfmpegProcess(string videoFileName, int audioTrackNumber, string outWaveFile)
+        {
+            if (!File.Exists(Configuration.Settings.General.FFmpegLocation) && Configuration.IsRunningOnWindows)
+            {
+                return null;
+            }
+
+            var audioParameter = string.Empty;
+            if (audioTrackNumber > 0)
+            {
+                audioParameter = $"-map 0:a:{audioTrackNumber}";
+            }
+
+            // TODO: handle center channel only
+            // labelFC.Text = string.Empty;
+            var fFmpegWaveTranscodeSettings = "-i \"{0}\" -vn -ar 16000 -ac 1 -ab 32k -af volume=1.75 -f wav {2} \"{1}\"";
+            // if (_useCenterChannelOnly)
+            // {
+            //     fFmpegWaveTranscodeSettings = "-i \"{0}\" -vn -ar 16000 -ab 32k -af volume=1.75 -af \"pan=mono|c0=FC\" -f wav {2} \"{1}\"";
+            //     labelFC.Text = "FC";
+            // }
+
+            //-i indicates the input
+            //-vn means no video output
+            //-ar 44100 indicates the sampling frequency.
+            //-ab indicates the bit rate (in this example 160kb/s)
+            //-af volume=1.75 will boot volume... 1.0 is normal
+            //-ac 2 means 2 channels
+            // "-map 0:a:0" is the first audio stream, "-map 0:a:1" is the second audio stream
+
+            var exeFilePath = Configuration.Settings.General.FFmpegLocation;
+            if (!Configuration.IsRunningOnWindows)
+            {
+                exeFilePath = "ffmpeg";
+            }
+
+            var parameters = string.Format(fFmpegWaveTranscodeSettings, videoFileName, outWaveFile, audioParameter);
+            return new Process
+            {
+                StartInfo = new ProcessStartInfo(exeFilePath, parameters)
+                {
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                }
+            };
+        }
+        private string GenerateWavFile(string videoFileName, int audioTrackNumber)
+        {
+            if (videoFileName.EndsWith(".wav"))
+            {
+                try
+                {
+                    using (var waveFile = new WavePeakGenerator(videoFileName))
+                    {
+                        if (waveFile.Header != null && waveFile.Header.SampleRate == 16000 && waveFile.Header.NumberOfChannels == 1)
+                        {
+                            return videoFileName;
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+
+            var ffmpegLog = new StringBuilder();
+            var outWaveFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+            _filesToDelete.Add(outWaveFile);
+            var process = GetFfmpegProcess(videoFileName, audioTrackNumber, outWaveFile);
+
+            process.ErrorDataReceived += (sender, args) =>
+            {
+                ffmpegLog.AppendLine(args.Data);
+            };
+
+            process.StartInfo.RedirectStandardError = true;
+            process.Start();
+            process.BeginErrorReadLine();
+
+            double seconds = 0;
+            // buttonCancel.Visible = true;
+            try
+            {
+                process.PriorityClass = ProcessPriorityClass.Normal;
+            }
+            catch
+            {
+                // ignored
+            }
+
+            // _cancel = false;
+            string targetDriveLetter = null;
+            if (Configuration.IsRunningOnWindows)
+            {
+                var root = Path.GetPathRoot(outWaveFile);
+                if (root.Length > 1 && root[1] == ':')
+                {
+                    targetDriveLetter = root.Remove(1);
+                }
+            }
+
+            while (!process.HasExited)
+            {
+                Application.DoEvents();
+                System.Threading.Thread.Sleep(100);
+                seconds += 0.1;
+
+                Invalidate();
+
+                if (targetDriveLetter != null && seconds > 1 && Convert.ToInt32(seconds) % 10 == 0)
+                {
+                    try
+                    {
+                        var drive = new DriveInfo(targetDriveLetter);
+                        if (drive.IsReady)
+                        {
+                            if (drive.AvailableFreeSpace < 50 * 1000000) // 50 mb
+                            {
+                                // TODO: handle low disk space
+                                // labelInfo.ForeColor = Color.Red;
+                                // labelInfo.Text = LanguageSettings.Current.AddWaveform.LowDiskSpace;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // ignored
+                    }
+                }
+            }
+
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(100);
+
+            if (!File.Exists(outWaveFile))
+            {
+                SeLogger.WhisperInfo("Generated wave file not found: " + outWaveFile + Environment.NewLine +
+                               "ffmpeg: " + process.StartInfo.FileName + Environment.NewLine +
+                               "Parameters: " + process.StartInfo.Arguments + Environment.NewLine +
+                               "OS: " + Environment.OSVersion + Environment.NewLine +
+                               "64-bit: " + Environment.Is64BitOperatingSystem + Environment.NewLine +
+                               "ffmpeg exit code: " + process.ExitCode + Environment.NewLine +
+                               "ffmpeg log: " + ffmpegLog);
+            }
+
+            return outWaveFile;
+        }
+        // THIS CODE IS REUSED FROM THE WHISPER AUDIO TO TEXT FORM (END)
 
         // Login to the True-bar (Subtitler) API
         private async void LoginButton_Click(object sender, EventArgs e)
@@ -239,12 +492,10 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             //     return;
             // }
 
-            // disable the login button while the request is in progress
+            // Disable the login button while the request is in progress
             _processing = true;
             LoginButton.Enabled = false;
             // TODO: handle session expiration
-
-            // string response = await _trueBarAPI.Login(username.Text, password.Text);
 
             // Call the new Subtitler API to login
             string response = await _trueBarSubtitlerAPI.Login(username.Text, password.Text);
@@ -282,52 +533,49 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
 
         private async void Generate_Click(object sender, EventArgs e)
         {
+            // Check if the user is logged in
             if (string.IsNullOrWhiteSpace(_accessToken))
             {
                 MessageBox.Show("Please login first!");
                 return;
             }
 
+            // Check if the video file is selected
             if (string.IsNullOrWhiteSpace(_videoFileName))
             {
                 MessageBox.Show("Please select a video file first!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            if (!await _trueBarAPI.IsApiServerReachableAsync())
-            {
-                MessageBox.Show("No internet connection!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
+            // Check if the API server is reachable 
+            // if (!await _trueBarSubtitlerAPI.IsApiServerReachableAsync())
+            // {
+            //     MessageBox.Show("No internet connection!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            //     return;
+            // }
 
-            // Disable the generate button while the request is in progress
+            
             _processing = true;
+            // Disable the generate button while the request is in progress
             generate.Enabled = false;
             progressBar1.Visible = true;
             progressBar1.Style = ProgressBarStyle.Marquee;
-
-            // Call the True-bar API to generate text from audio
-            // string response = await _trueBarAPI.UploadFileAsync(_accessToken, _videoFileName);
-
+            label4.Text = "Generating WAV file...";
+            
+            // Check if the the uploaded file is .wav, if not, convert it to .wav
+            _audioFileName = _videoFileName != null ? GenerateWavFile(_videoFileName, _audioTrackNumber) : null;
 
             try
             {
-                string response = await _trueBarSubtitlerAPI.UploadFileAsync(_accessToken, _videoFileName);
+                string response = await _trueBarSubtitlerAPI.UploadFileAsync(_accessToken, _audioFileName, checkBox1.Checked, checkBox2.Checked, checkBox3.Checked, checkBox4.Checked);
                 var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
-                // MessageBox.Show("Response: " + response);   
-                // if (jsonResponse.ContainsKey("sessionId"))
-                // {
-                //     // Store the session ID securely 
-                //     _sessionId = jsonResponse["sessionId"];
-                //     _statusCheckTimer.Start();
-                //     // transcription is in progress   
-                // }
+
                 if (jsonResponse.ContainsKey("job_id"))
                 {
-                    // Store the session ID securely 
+                    // Store the session ID in-memory
                     _jobId = jsonResponse["job_id"];
+                    label4.Text = "Uploading...";
                     _statusCheckTimer.Start();
-                    // transcription is in progress   
                 }
                 else if (jsonResponse.ContainsKey("error"))
                 {
@@ -351,24 +599,6 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                 generate.Enabled = true;
                 progressBar1.Visible = false;
             }
-        }
-
-        private int GetProgress(string statusResponse)
-        {
-            // Parse the response to determine the progress
-            var status = JsonConvert.DeserializeObject<dynamic>(statusResponse);
-
-            if (status.status == "UPLOADING")
-            {
-                return -1;
-            }
-            var recordedSeconds = status?.recordedSeconds.Value;
-            var processedSeconds = status?.processedSeconds.Value;
-            if (recordedSeconds == null || processedSeconds == null)
-            {
-                return 0;
-            }
-            return (int)(100 * processedSeconds / recordedSeconds);
         }
 
         public Subtitle LoadWebVttFromJson(string webVTTcontent)
@@ -403,24 +633,46 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             _subtitle.Paragraphs.Clear();
             _subtitle.Paragraphs.AddRange(webVTTsubtitles.Paragraphs);
 
-
-
             MessageBox.Show("Transcription completed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             _processing = false;
             DialogResult = DialogResult.OK; // Close the modal with OK result
             Close();
         }
+
         private async void StatusCheckTimer_Tick(object sender, EventArgs e)
         {
             try
             {
-                label4.Text = "Uploading...";
-                // Call the API to check the transcription status
+                // Call the API to check the transcription job status
                 var statusResponse = await _trueBarSubtitlerAPI.CheckJobStatus(_accessToken, _jobId);
 
+                // Check if the response is successful
+                if (!statusResponse.Contains("status"))
+                {
+                    // Stop the timer and show an error message
+                    _statusCheckTimer.Stop();
+                    _processing = false;
+                    progressBar1.Visible = false;
+                    label4.Text = "Failed";
+
+                    if (string.IsNullOrWhiteSpace(statusResponse))
+                    {
+                        MessageBox.Show("No response from the server", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    else if (statusResponse.Contains("error"))
+                    {
+                        MessageBox.Show("An error occurred while checking the status: " + statusResponse, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Unexpected response: " + statusResponse, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+
+                    generate.Enabled = true; // Re-enable the generate button
+                    return;
+                }
 
                 progressBar1.Style = ProgressBarStyle.Marquee;
-
                 var transcriptionStatus = CheckTranscriptionStatus(statusResponse);
 
                 switch (transcriptionStatus)
@@ -430,18 +682,23 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                         label4.Text = "Transcribing...";
                         break;
                     case "finished":
-                        _statusCheckTimer.Stop(); // Stop the timer
+                        progressBar1.Style = ProgressBarStyle.Continuous;
+                        progressBar1.Value = 100;
+                        _processing = false;
+                        _statusCheckTimer.Stop();
                         // Retrieve the transcription
                         GetSubtitlesFromResponse(statusResponse);
                         break;
                     case "failed":
-                        _statusCheckTimer.Stop(); // Stop the timer
+                        _statusCheckTimer.Stop(); 
                         _processing = false;
+                        progressBar1.Visible = false;
                         MessageBox.Show("Transcription failed!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        generate.Enabled = true;
                         break;
                     default:
                         // Handle other statuses
-                        MessageBox.Show($"Transcription status: {transcriptionStatus}", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        label4.Text = transcriptionStatus;
                         break;
                 }
 
@@ -457,90 +714,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
         private string CheckTranscriptionStatus(string statusResponse)
         {
             var status = JsonConvert.DeserializeObject<dynamic>(statusResponse);
-            return status?.status;
-        }
-
-        // private async Task RetrieveTranscriptionAsync()
-        // {
-        //     try
-        //     {
-        //         // Call the API to retrieve the transcription
-        //         var transcription = await _trueBarAPI.GetSessionTranscriptAsync(_sessionId, _accessToken);
-
-        //         // Display or process the transcription
-        //         MessageBox.Show("Transcription completed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        //         LoadTranscriptionIntoSubtitle(transcription);
-
-        //         _processing = false;
-        //         DialogResult = DialogResult.OK; // Close the modal with OK result
-        //         Close();
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         MessageBox.Show($"An error occurred while retrieving the transcription: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        //         generate.Enabled = true; // Re-enable the generate button
-        //     }
-        // }
-
-        public void LoadTranscriptionIntoSubtitle(string transcriptionJson)
-        {
-            _subtitle.Paragraphs.Clear(); // Clear the existing paragraphs
-            try
-            {
-                // Parse the JSON
-                List<SubtitleItem> transcriptionSegments = JsonConvert.DeserializeObject<List<SubtitleItem>>(transcriptionJson);
-
-                if (transcriptionSegments == null)
-                {
-                    throw new InvalidOperationException("Invalid transcription format.");
-                }
-
-                foreach (var transcriptionSegment in transcriptionSegments)
-                {
-                    transcriptionSegment.Content = transcriptionSegment.Content.Replace("\\\"", "\""); // Fix escaped quotes
-                    List<SubtitleDetails> subtitles = JsonConvert.DeserializeObject<List<SubtitleDetails>>(transcriptionSegment.Content);
-
-                    foreach (var subtitle in subtitles)
-                    {
-                        var paragraph = new Paragraph
-                        {
-                            StartTime = new TimeCode(subtitle.StartTime * 1000), // Convert seconds to milliseconds
-                            EndTime = new TimeCode(subtitle.EndTime * 1000),     // Convert seconds to milliseconds
-                            Text = subtitle.Text
-                        };
-                        _subtitle.Paragraphs.Add(paragraph);
-                    }
-                }
-                // Post-process the transcription
-                var postProcessor = new AudioToTextPostProcessor("sl")
-                {
-                    ParagraphMaxChars = Configuration.Settings.General.SubtitleLineMaximumLength * 2,
-                };
-                var fixedSubtitles = postProcessor.Fix(
-                _subtitle,
-                true,
-                false,
-                Configuration.Settings.Tools.WhisperPostProcessingMergeLines,
-                false,
-                Configuration.Settings.Tools.WhisperPostProcessingFixShortDuration,
-                Configuration.Settings.Tools.WhisperPostProcessingSplitLines,
-                AudioToTextPostProcessor.Engine.Whisper);
-                // Fix(Engine engine, Subtitle input, bool usePostProcessing, bool addPeriods, bool mergeLines, bool fixCasing, bool fixShortDuration, bool splitLines)
-                // Merge lines with same time codes
-                var mergedSubtitle = MergeLinesWithSameTimeCodes.Merge(fixedSubtitles, new List<int>(), out _, true, false, true, 1000, "en", new List<int>(), new Dictionary<int, bool>(), new Subtitle());
-                // Fix long and short display times
-                var fixedAndMergedSubtitle = _fixDurationLimits.Fix(mergedSubtitle);
-                // _subtitle.Paragraphs.Clear();
-                // _subtitle.Paragraphs.AddRange(fixedAndMergedSubtitle.Paragraphs);
-
-                _subtitle.Paragraphs.Clear();
-                _subtitle.Paragraphs.AddRange(fixedAndMergedSubtitle.Paragraphs);
-            }
-            catch (Exception ex)
-            {
-                // Handle parsing errors
-                throw new InvalidOperationException("Failed to load transcription into subtitle.", ex);
-            }
+            return status.status;
         }
 
         // Closing the form when transcription in progress
@@ -564,7 +738,6 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             }
         }
 
-
         private void Cancel_Click(object sender, EventArgs e)
         {
             if (_statusCheckTimer.Enabled || _processing)
@@ -579,6 +752,24 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
 
         }
 
+        public static void DeleteTemporaryFiles(List<string> filesToDelete)
+        {
+            foreach (var fileName in filesToDelete)
+            {
+                try
+                {
+                    if (File.Exists(fileName))
+                    {
+                        File.Delete(fileName);
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+        }
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             if (_statusCheckTimer.Enabled || _processing)
@@ -589,6 +780,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             }
             else
             {
+                DeleteTemporaryFiles(_filesToDelete);
                 base.OnFormClosing(e);
             }
         }
@@ -596,8 +788,10 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
         private void LinkLabel_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             // open the True-bar website
-            UiUtil.OpenUrl("https://demo.true-bar.si/");
+            UiUtil.OpenUrl("https://vitasis.si/products/truebar");
         }
+
+
     }
 }
 
@@ -605,26 +799,4 @@ public class SubtitleResponse
 {
     public string LanguageCode { get; set; }
     public string Content { get; set; }
-}
-
-public class SubtitleItem
-{
-    public int Id { get; set; }
-    public string Content { get; set; }
-}
-
-public class SubtitleDetails
-{
-    public string Text { get; set; }
-    public double StartTime { get; set; }
-    public double EndTime { get; set; }
-    public bool SpaceBefore { get; set; }
-    public string SpeakerCode { get; set; }
-    public Metadata Metadata { get; set; }
-}
-
-public class Metadata
-{
-    public bool? PostCapitalized { get; set; }
-    public string Source { get; set; }
 }

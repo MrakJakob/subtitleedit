@@ -17,6 +17,18 @@ namespace Nikse.SubtitleEdit.Controls.Interfaces
             _httpClient = new HttpClient();
         }
 
+        public async Task<bool> IsApiServerReachableAsync()
+        {
+            try
+            {
+                var response = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, "https://staging-subtitler.true-bar.si/"));
+                return response.IsSuccessStatusCode;
+            }
+            catch
+            {
+                return false; // If an exception occurs, assume the server is unreachable
+            }
+        }
 
         public async Task<string> Login(string client_id, string client_secret)
         {
@@ -52,7 +64,7 @@ namespace Nikse.SubtitleEdit.Controls.Interfaces
             }
         }
 
-        public async Task<string> UploadFileAsync(string access_token, string filename)
+        public async Task<string> UploadFileAsync(string access_token, string filename, bool do_voice_activity_detection, bool do_punctuation, bool do_denormalization, bool do_speaker_change_detection)
         {
             using (var formData = new MultipartFormDataContent())
             {
@@ -66,7 +78,7 @@ namespace Nikse.SubtitleEdit.Controls.Interfaces
                 try
                 {
                     HttpResponseMessage response = await _httpClient.PostAsync(
-                        "https://staging-subtitler.true-bar.si/v1/captions/longrunningmake?source_language_id=sl-SI&do_voice_activity_detection=true&do_punctuation=true&do_denormalization=true&do_speaker_change_detection=false",
+                        "https://staging-subtitler.true-bar.si/v1/captions/longrunningmake?source_language_id=sl-SI&do_voice_activity_detection=" + do_voice_activity_detection + "&do_punctuation=" + do_punctuation + "&do_denormalization=" + do_denormalization + "&do_speaker_change_detection=" + do_speaker_change_detection,
                         formData
                     );
 
