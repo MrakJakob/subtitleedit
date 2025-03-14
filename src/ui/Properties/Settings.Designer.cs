@@ -22,5 +22,8 @@ namespace Nikse.SubtitleEdit.Properties {
                 return defaultInstance;
             }
         }
+
+        public string ClientID { get; internal set; }
+        public string ClientSecret { get; internal set; }
     }
 }

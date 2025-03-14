@@ -28,41 +28,42 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
         private readonly int _audioTrackNumber;
         private readonly Form _parentForm;
         private string _accessToken;
-        private string _sessionId;
+        private string _clientID;
+        private string _clientSecret;
         private string _jobId;
         private readonly Timer _statusCheckTimer;
-        private readonly TrueBarAPI _trueBarAPI;
         private readonly TrueBarSubtitlerAPI _trueBarSubtitlerAPI;
-        private readonly SubtitleListView _subtitleListView1;
-        private readonly FixDurationLimits _fixDurationLimits;
         bool _processing = false;
         private readonly List<string> _filesToDelete;
-        private Button generate;
-        private Label label1;
+        bool _isUserLoggedIn = false;
+        private Button generateButton;
+        private Label infoLabel;
         private Button LoginButton;
-        private Label label2;
-        private Label label3;
-        private TextBox username;
-        private TextBox password;
-        private LinkLabel linkLabel1;
+        private Label clientIdLabel;
+        private Label clientSecretLabel;
+        private TextBox clientIdTextBox;
+        private TextBox clientSecretTextBox;
+        private LinkLabel trueBarLinkLabel;
         private ProgressBar progressBar1;
         private Label label4;
         private Label label5;
-        private Label label6;
-        private CheckBox checkBox1;
-        private CheckBox checkBox2;
-        private CheckBox checkBox3;
-        private CheckBox checkBox4;
-        private ComboBox comboBox1;
-        private CheckBox checkBox5;
-        private Button cancel;
+        private Label settingsLabel;
+        private CheckBox voiceActivityDetectionCheckBox;
+        private CheckBox punctuationCheckBox;
+        private CheckBox denormalizationCheckBox;
+        private CheckBox speakerChangeCheckBox;
+        private ComboBox languageComboBox;
+        private CheckBox translateToEnglishCheckBox;
+        private Label languageLabel;
+        private CheckBox rememberMeCheckBox;
+        private Button cancelButton;
 
         public TrueBarAudioToText(string videoFileName, Subtitle subtitle, int audioTrackNumber, Form parentForm, TrueBarSubtitlerAPI trueBarSubtitlerAPI)
         {
             UiUtil.PreInitialize(this);
             InitializeComponent();
             UiUtil.FixFonts(this);
-            UiUtil.FixLargeFonts(this, generate);
+            UiUtil.FixLargeFonts(this, generateButton);
             _videoFileName = videoFileName;
             _subtitle = subtitle;
             _audioTrackNumber = audioTrackNumber;
@@ -70,123 +71,128 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             _trueBarSubtitlerAPI = trueBarSubtitlerAPI;
             _statusCheckTimer = new Timer
             {
-                Interval = 1000
+                Interval = 5000
             };
             _statusCheckTimer.Tick += StatusCheckTimer_Tick;
-            
+
             _filesToDelete = new List<string>();
-            username.TabIndex = 0;
+            CheckIfAuthenticated();
+            
+            clientIdTextBox.KeyDown += TextBox_KeyDown;
+            clientSecretTextBox.KeyDown += TextBox_KeyDown;
         }
 
 
         public void InitializeComponent()
         {
-            this.cancel = new System.Windows.Forms.Button();
-            this.generate = new System.Windows.Forms.Button();
-            this.label1 = new System.Windows.Forms.Label();
+            this.cancelButton = new System.Windows.Forms.Button();
+            this.generateButton = new System.Windows.Forms.Button();
+            this.infoLabel = new System.Windows.Forms.Label();
             this.LoginButton = new System.Windows.Forms.Button();
-            this.label2 = new System.Windows.Forms.Label();
-            this.label3 = new System.Windows.Forms.Label();
-            this.username = new System.Windows.Forms.TextBox();
-            this.password = new System.Windows.Forms.TextBox();
-            this.linkLabel1 = new System.Windows.Forms.LinkLabel();
+            this.clientIdLabel = new System.Windows.Forms.Label();
+            this.clientSecretLabel = new System.Windows.Forms.Label();
+            this.clientIdTextBox = new System.Windows.Forms.TextBox();
+            this.clientSecretTextBox = new System.Windows.Forms.TextBox();
+            this.trueBarLinkLabel = new System.Windows.Forms.LinkLabel();
             this.progressBar1 = new System.Windows.Forms.ProgressBar();
             this.label4 = new System.Windows.Forms.Label();
             this.label5 = new System.Windows.Forms.Label();
-            this.label6 = new System.Windows.Forms.Label();
-            this.checkBox1 = new System.Windows.Forms.CheckBox();
-            this.checkBox2 = new System.Windows.Forms.CheckBox();
-            this.checkBox3 = new System.Windows.Forms.CheckBox();
-            this.checkBox4 = new System.Windows.Forms.CheckBox();
-            this.comboBox1 = new System.Windows.Forms.ComboBox();
-            this.checkBox5 = new System.Windows.Forms.CheckBox();
+            this.settingsLabel = new System.Windows.Forms.Label();
+            this.voiceActivityDetectionCheckBox = new System.Windows.Forms.CheckBox();
+            this.punctuationCheckBox = new System.Windows.Forms.CheckBox();
+            this.denormalizationCheckBox = new System.Windows.Forms.CheckBox();
+            this.speakerChangeCheckBox = new System.Windows.Forms.CheckBox();
+            this.languageComboBox = new System.Windows.Forms.ComboBox();
+            this.translateToEnglishCheckBox = new System.Windows.Forms.CheckBox();
+            this.languageLabel = new System.Windows.Forms.Label();
+            this.rememberMeCheckBox = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
-            // cancel
+            // cancelButton
             // 
-            this.cancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.cancel.Location = new System.Drawing.Point(381, 323);
-            this.cancel.Name = "cancel";
-            this.cancel.Size = new System.Drawing.Size(134, 26);
-            this.cancel.TabIndex = 0;
-            this.cancel.Text = "Cancel";
-            this.cancel.UseVisualStyleBackColor = true;
-            this.cancel.Click += new System.EventHandler(this.Cancel_Click);
+            this.cancelButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.cancelButton.Location = new System.Drawing.Point(381, 323);
+            this.cancelButton.Name = "cancelButton";
+            this.cancelButton.Size = new System.Drawing.Size(134, 26);
+            this.cancelButton.TabIndex = 20;
+            this.cancelButton.Text = "Cancel";
+            this.cancelButton.UseVisualStyleBackColor = true;
+            this.cancelButton.Click += new System.EventHandler(this.Cancel_Click);
             // 
-            // generate
+            // generateButton
             // 
-            this.generate.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.generate.Location = new System.Drawing.Point(241, 323);
-            this.generate.Name = "generate";
-            this.generate.Size = new System.Drawing.Size(134, 26);
-            this.generate.TabIndex = 1;
-            this.generate.Text = "Generate";
-            this.generate.UseVisualStyleBackColor = true;
-            this.generate.Click += new System.EventHandler(this.Generate_Click);
+            this.generateButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.generateButton.Location = new System.Drawing.Point(241, 323);
+            this.generateButton.Name = "generateButton";
+            this.generateButton.Size = new System.Drawing.Size(134, 26);
+            this.generateButton.TabIndex = 3;
+            this.generateButton.Text = "Generate";
+            this.generateButton.UseVisualStyleBackColor = true;
+            this.generateButton.Click += new System.EventHandler(this.Generate_Click);
             // 
-            // label1
+            // infoLabel
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(12, 40);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(276, 13);
-            this.label1.TabIndex = 3;
-            this.label1.Text = "Generate text from audio via True-bar speech recognition";
+            this.infoLabel.AutoSize = true;
+            this.infoLabel.Location = new System.Drawing.Point(12, 40);
+            this.infoLabel.Name = "infoLabel";
+            this.infoLabel.Size = new System.Drawing.Size(276, 13);
+            this.infoLabel.TabIndex = 3;
+            this.infoLabel.Text = "Generate text from audio via True-bar speech recognition";
             // 
             // LoginButton
             // 
-            this.LoginButton.Location = new System.Drawing.Point(381, 137);
+            this.LoginButton.Location = new System.Drawing.Point(381, 130);
             this.LoginButton.Name = "LoginButton";
             this.LoginButton.Size = new System.Drawing.Size(134, 26);
-            this.LoginButton.TabIndex = 9;
+            this.LoginButton.TabIndex = 2;
             this.LoginButton.Text = "Login";
             this.LoginButton.UseVisualStyleBackColor = true;
             this.LoginButton.Click += new System.EventHandler(this.LoginButton_Click);
             // 
-            // label2
+            // clientIdLabel
             // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(12, 116);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(55, 13);
-            this.label2.TabIndex = 10;
-            this.label2.Text = "Username";
+            this.clientIdLabel.AutoSize = true;
+            this.clientIdLabel.Location = new System.Drawing.Point(12, 111);
+            this.clientIdLabel.Name = "clientIdLabel";
+            this.clientIdLabel.Size = new System.Drawing.Size(44, 13);
+            this.clientIdLabel.TabIndex = 10;
+            this.clientIdLabel.Text = "ClientID";
             // 
-            // label3
+            // clientSecretLabel
             // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(185, 116);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(53, 13);
-            this.label3.TabIndex = 11;
-            this.label3.Text = "Password";
+            this.clientSecretLabel.AutoSize = true;
+            this.clientSecretLabel.Location = new System.Drawing.Point(185, 111);
+            this.clientSecretLabel.Name = "clientSecretLabel";
+            this.clientSecretLabel.Size = new System.Drawing.Size(64, 13);
+            this.clientSecretLabel.TabIndex = 11;
+            this.clientSecretLabel.Text = "ClientSecret";
             // 
-            // username
+            // clientIdTextBox
             // 
-            this.username.Location = new System.Drawing.Point(15, 141);
-            this.username.Name = "username";
-            this.username.Size = new System.Drawing.Size(155, 20);
-            this.username.TabIndex = 12;
+            this.clientIdTextBox.Location = new System.Drawing.Point(15, 136);
+            this.clientIdTextBox.Name = "clientIdTextBox";
+            this.clientIdTextBox.Size = new System.Drawing.Size(155, 20);
+            this.clientIdTextBox.TabIndex = 0;
             // 
-            // password
+            // clientSecretTextBox
             // 
-            this.password.Location = new System.Drawing.Point(188, 141);
-            this.password.Name = "password";
-            this.password.PasswordChar = '*';
-            this.password.Size = new System.Drawing.Size(155, 20);
-            this.password.TabIndex = 13;
-            this.password.UseSystemPasswordChar = true;
+            this.clientSecretTextBox.Location = new System.Drawing.Point(188, 136);
+            this.clientSecretTextBox.Name = "clientSecretTextBox";
+            this.clientSecretTextBox.PasswordChar = '*';
+            this.clientSecretTextBox.Size = new System.Drawing.Size(155, 20);
+            this.clientSecretTextBox.TabIndex = 1;
+            this.clientSecretTextBox.UseSystemPasswordChar = true;
             // 
-            // linkLabel1
+            // trueBarLinkLabel
             // 
-            this.linkLabel1.AutoSize = true;
-            this.linkLabel1.Location = new System.Drawing.Point(12, 64);
-            this.linkLabel1.Name = "linkLabel1";
-            this.linkLabel1.Size = new System.Drawing.Size(86, 13);
-            this.linkLabel1.TabIndex = 14;
-            this.linkLabel1.TabStop = true;
-            this.linkLabel1.Text = "True-bar website";
-            this.linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.LinkLabel_LinkClicked);
+            this.trueBarLinkLabel.AutoSize = true;
+            this.trueBarLinkLabel.Location = new System.Drawing.Point(12, 64);
+            this.trueBarLinkLabel.Name = "trueBarLinkLabel";
+            this.trueBarLinkLabel.Size = new System.Drawing.Size(86, 13);
+            this.trueBarLinkLabel.TabIndex = 14;
+            this.trueBarLinkLabel.TabStop = true;
+            this.trueBarLinkLabel.Text = "True-bar website";
+            this.trueBarLinkLabel.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.LinkLabel_LinkClicked);
             // 
             // progressBar1
             // 
@@ -215,106 +221,129 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             this.label5.Size = new System.Drawing.Size(0, 13);
             this.label5.TabIndex = 17;
             // 
-            // label6
+            // settingsLabel
             // 
-            this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(12, 180);
-            this.label6.Name = "label6";
-            this.label6.Size = new System.Drawing.Size(45, 13);
-            this.label6.TabIndex = 19;
-            this.label6.Text = "Settings";
+            this.settingsLabel.AutoSize = true;
+            this.settingsLabel.Location = new System.Drawing.Point(12, 180);
+            this.settingsLabel.Name = "settingsLabel";
+            this.settingsLabel.Size = new System.Drawing.Size(45, 13);
+            this.settingsLabel.TabIndex = 19;
+            this.settingsLabel.Text = "Settings";
             // 
-            // checkBox1
+            // voiceActivityDetectionCheckBox
             // 
-            this.checkBox1.AutoSize = true;
-            this.checkBox1.Checked = true;
-            this.checkBox1.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.checkBox1.Location = new System.Drawing.Point(15, 206);
-            this.checkBox1.Name = "checkBox1";
-            this.checkBox1.Size = new System.Drawing.Size(139, 17);
-            this.checkBox1.TabIndex = 20;
-            this.checkBox1.Text = "Voice Activity Detection";
-            this.checkBox1.UseVisualStyleBackColor = true;
+            this.voiceActivityDetectionCheckBox.AutoSize = true;
+            this.voiceActivityDetectionCheckBox.Checked = true;
+            this.voiceActivityDetectionCheckBox.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.voiceActivityDetectionCheckBox.Location = new System.Drawing.Point(15, 206);
+            this.voiceActivityDetectionCheckBox.Name = "voiceActivityDetectionCheckBox";
+            this.voiceActivityDetectionCheckBox.Size = new System.Drawing.Size(139, 17);
+            this.voiceActivityDetectionCheckBox.TabIndex = 20;
+            this.voiceActivityDetectionCheckBox.Text = "Voice Activity Detection";
+            this.voiceActivityDetectionCheckBox.UseVisualStyleBackColor = true;
             // 
-            // checkBox2
+            // punctuationCheckBox
             // 
-            this.checkBox2.AutoSize = true;
-            this.checkBox2.Checked = true;
-            this.checkBox2.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.checkBox2.Location = new System.Drawing.Point(15, 229);
-            this.checkBox2.Name = "checkBox2";
-            this.checkBox2.Size = new System.Drawing.Size(83, 17);
-            this.checkBox2.TabIndex = 21;
-            this.checkBox2.Text = "Punctuation";
-            this.checkBox2.UseVisualStyleBackColor = true;
+            this.punctuationCheckBox.AutoSize = true;
+            this.punctuationCheckBox.Checked = true;
+            this.punctuationCheckBox.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.punctuationCheckBox.Location = new System.Drawing.Point(15, 229);
+            this.punctuationCheckBox.Name = "punctuationCheckBox";
+            this.punctuationCheckBox.Size = new System.Drawing.Size(83, 17);
+            this.punctuationCheckBox.TabIndex = 21;
+            this.punctuationCheckBox.Text = "Punctuation";
+            this.punctuationCheckBox.UseVisualStyleBackColor = true;
             // 
-            // checkBox3
+            // denormalizationCheckBox
             // 
-            this.checkBox3.AutoSize = true;
-            this.checkBox3.Checked = true;
-            this.checkBox3.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.checkBox3.Location = new System.Drawing.Point(15, 252);
-            this.checkBox3.Name = "checkBox3";
-            this.checkBox3.Size = new System.Drawing.Size(101, 17);
-            this.checkBox3.TabIndex = 22;
-            this.checkBox3.Text = "Denormalization";
-            this.checkBox3.UseVisualStyleBackColor = true;
+            this.denormalizationCheckBox.AutoSize = true;
+            this.denormalizationCheckBox.Checked = true;
+            this.denormalizationCheckBox.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.denormalizationCheckBox.Location = new System.Drawing.Point(15, 252);
+            this.denormalizationCheckBox.Name = "denormalizationCheckBox";
+            this.denormalizationCheckBox.Size = new System.Drawing.Size(101, 17);
+            this.denormalizationCheckBox.TabIndex = 22;
+            this.denormalizationCheckBox.Text = "Denormalization";
+            this.denormalizationCheckBox.UseVisualStyleBackColor = true;
             // 
-            // checkBox4
+            // speakerChangeCheckBox
             // 
-            this.checkBox4.AutoSize = true;
-            this.checkBox4.Checked = true;
-            this.checkBox4.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.checkBox4.Location = new System.Drawing.Point(15, 275);
-            this.checkBox4.Name = "checkBox4";
-            this.checkBox4.Size = new System.Drawing.Size(155, 17);
-            this.checkBox4.TabIndex = 23;
-            this.checkBox4.Text = "Speaker Change Detection";
-            this.checkBox4.UseVisualStyleBackColor = true;
+            this.speakerChangeCheckBox.AutoSize = true;
+            this.speakerChangeCheckBox.Checked = true;
+            this.speakerChangeCheckBox.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.speakerChangeCheckBox.Location = new System.Drawing.Point(15, 275);
+            this.speakerChangeCheckBox.Name = "speakerChangeCheckBox";
+            this.speakerChangeCheckBox.Size = new System.Drawing.Size(155, 17);
+            this.speakerChangeCheckBox.TabIndex = 23;
+            this.speakerChangeCheckBox.Text = "Speaker Change Detection";
+            this.speakerChangeCheckBox.UseVisualStyleBackColor = true;
             // 
-            // comboBox1
+            // languageComboBox
             // 
-            this.comboBox1.Enabled = false;
-            this.comboBox1.FormattingEnabled = true;
-            this.comboBox1.Location = new System.Drawing.Point(209, 204);
-            this.comboBox1.Name = "comboBox1";
-            this.comboBox1.Size = new System.Drawing.Size(134, 21);
-            this.comboBox1.TabIndex = 24;
-            this.comboBox1.Text = "Slovenščina (sl-SI)";
+            this.languageComboBox.Enabled = false;
+            this.languageComboBox.FormattingEnabled = true;
+            this.languageComboBox.Location = new System.Drawing.Point(209, 229);
+            this.languageComboBox.Name = "languageComboBox";
+            this.languageComboBox.Size = new System.Drawing.Size(134, 21);
+            this.languageComboBox.TabIndex = 24;
+            this.languageComboBox.Text = "Slovenščina (sl-SI)";
             // 
-            // checkBox5
+            // translateToEnglishCheckBox
             // 
-            this.checkBox5.AutoSize = true;
-            this.checkBox5.Enabled = false;
-            this.checkBox5.Location = new System.Drawing.Point(381, 206);
-            this.checkBox5.Name = "checkBox5";
-            this.checkBox5.Size = new System.Drawing.Size(119, 17);
-            this.checkBox5.TabIndex = 25;
-            this.checkBox5.Text = "Translate to English";
-            this.checkBox5.UseVisualStyleBackColor = true;
+            this.translateToEnglishCheckBox.AutoSize = true;
+            this.translateToEnglishCheckBox.Enabled = false;
+            this.translateToEnglishCheckBox.Location = new System.Drawing.Point(381, 231);
+            this.translateToEnglishCheckBox.Name = "translateToEnglishCheckBox";
+            this.translateToEnglishCheckBox.Size = new System.Drawing.Size(119, 17);
+            this.translateToEnglishCheckBox.TabIndex = 25;
+            this.translateToEnglishCheckBox.Text = "Translate to English";
+            this.translateToEnglishCheckBox.UseVisualStyleBackColor = true;
+            // 
+            // languageLabel
+            // 
+            this.languageLabel.AutoSize = true;
+            this.languageLabel.Location = new System.Drawing.Point(206, 206);
+            this.languageLabel.Name = "languageLabel";
+            this.languageLabel.Size = new System.Drawing.Size(55, 13);
+            this.languageLabel.TabIndex = 26;
+            this.languageLabel.Text = "Language";
+            // 
+            // rememberMeCheckBox
+            // 
+            this.rememberMeCheckBox.AutoSize = true;
+            this.rememberMeCheckBox.Checked = true;
+            this.rememberMeCheckBox.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.rememberMeCheckBox.Location = new System.Drawing.Point(188, 162);
+            this.rememberMeCheckBox.Name = "rememberMeCheckBox";
+            this.rememberMeCheckBox.Size = new System.Drawing.Size(94, 17);
+            this.rememberMeCheckBox.TabIndex = 28;
+            this.rememberMeCheckBox.Text = "Remember me";
+            this.rememberMeCheckBox.UseVisualStyleBackColor = true;
             // 
             // TrueBarAudioToText
             // 
             this.ClientSize = new System.Drawing.Size(527, 361);
-            this.Controls.Add(this.checkBox5);
-            this.Controls.Add(this.comboBox1);
-            this.Controls.Add(this.checkBox4);
-            this.Controls.Add(this.checkBox3);
-            this.Controls.Add(this.checkBox2);
-            this.Controls.Add(this.checkBox1);
-            this.Controls.Add(this.label6);
+            this.Controls.Add(this.rememberMeCheckBox);
+            this.Controls.Add(this.languageLabel);
+            this.Controls.Add(this.translateToEnglishCheckBox);
+            this.Controls.Add(this.languageComboBox);
+            this.Controls.Add(this.speakerChangeCheckBox);
+            this.Controls.Add(this.denormalizationCheckBox);
+            this.Controls.Add(this.punctuationCheckBox);
+            this.Controls.Add(this.voiceActivityDetectionCheckBox);
+            this.Controls.Add(this.settingsLabel);
             this.Controls.Add(this.label5);
             this.Controls.Add(this.label4);
             this.Controls.Add(this.progressBar1);
-            this.Controls.Add(this.linkLabel1);
-            this.Controls.Add(this.password);
-            this.Controls.Add(this.username);
-            this.Controls.Add(this.label3);
-            this.Controls.Add(this.label2);
+            this.Controls.Add(this.trueBarLinkLabel);
+            this.Controls.Add(this.clientSecretTextBox);
+            this.Controls.Add(this.clientIdTextBox);
+            this.Controls.Add(this.clientSecretLabel);
+            this.Controls.Add(this.clientIdLabel);
             this.Controls.Add(this.LoginButton);
-            this.Controls.Add(this.label1);
-            this.Controls.Add(this.generate);
-            this.Controls.Add(this.cancel);
+            this.Controls.Add(this.infoLabel);
+            this.Controls.Add(this.generateButton);
+            this.Controls.Add(this.cancelButton);
             this.MaximumSize = new System.Drawing.Size(543, 400);
             this.MinimumSize = new System.Drawing.Size(543, 400);
             this.Name = "TrueBarAudioToText";
@@ -477,46 +506,137 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
         }
         // THIS CODE IS REUSED FROM THE WHISPER AUDIO TO TEXT FORM (END)
 
+        private void TextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            // Check if the Enter key was pressed
+            if (e.KeyCode == Keys.Enter)
+            {
+                // Trigger the Login button's click event
+                LoginButton.PerformClick();
+                e.SuppressKeyPress = true; // Prevents the "ding" sound
+            }
+        }
+
+        private void CheckIfAuthenticated()
+        {
+            // Load authentication data
+            var (clientID, clientSecret) = AuthHelper.LoadAuthData();
+            if (!string.IsNullOrWhiteSpace(clientID) && !string.IsNullOrWhiteSpace(clientSecret))
+            {
+                clientIdTextBox.Text = clientID;
+                clientSecretTextBox.Text = clientSecret;
+                _clientID = clientID;
+                _clientSecret = clientSecret;
+            }
+
+        }
+
         // Login to the True-bar (Subtitler) API
         private async void LoginButton_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(username.Text) || string.IsNullOrWhiteSpace(password.Text))
+            // Check if the user is already logged in
+            if (LoginButton.Text == "Log Out")
+            {
+                // Clear the access token
+                _accessToken = null;
+                // Clear the login fields
+                clientSecretTextBox.Text = string.Empty;
+                // Enable the login fields
+                clientIdTextBox.Enabled = true;
+                clientSecretTextBox.Enabled = true;
+                // Change the button text
+                LoginButton.Text = "Login";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(clientIdTextBox.Text) || string.IsNullOrWhiteSpace(clientSecretTextBox.Text))
             {
                 MessageBox.Show("Please enter username and password");
                 return;
             }
 
-            // if (!await _trueBarAPI.IsApiServerReachableAsync())
-            // {
-            //     MessageBox.Show("No internet connection!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            //     return;
-            // }
-
             // Disable the login button while the request is in progress
             _processing = true;
             LoginButton.Enabled = false;
+
+            // Check internet connection
+            if (!await _trueBarSubtitlerAPI.CheckForInternetConnection())
+            {
+                MessageBox.Show("No internet connection!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                LoginButton.Enabled = true;
+                return;
+            }
+
+            // Check if the API server is reachable
+            if (!await _trueBarSubtitlerAPI.IsApiServerReachableAsync())
+            {
+                MessageBox.Show("API is not reachable!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                LoginButton.Enabled = true;
+                return;
+            }
+
             // TODO: handle session expiration
 
-            // Call the new Subtitler API to login
-            string response = await _trueBarSubtitlerAPI.Login(username.Text, password.Text);
+            await Login(clientIdTextBox.Text, clientSecretTextBox.Text);
+        }
 
+        private async Task Login(string clientID, string clientSecret, bool relogin = false)
+        {
             try
             {
+                // Call the new Subtitler API to login
+                string response = await _trueBarSubtitlerAPI.Login(clientID, clientSecret);
                 var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
-                _processing = false;
 
                 if (jsonResponse.ContainsKey("access_token"))
                 {
                     string accessToken = jsonResponse["access_token"];
-                    MessageBox.Show("Login successful!");
-                    // Put focus on the generate button
-                    generate.Focus();
-                    // Store the access token securely (e.g., in-memory or a secure storage)
+
+                    LoginButton.Text = "Log Out";
+                    LoginButton.Enabled = true;
+                    // Store the client ID and secret
+                    if (string.IsNullOrWhiteSpace(_clientID) || string.IsNullOrWhiteSpace(_clientSecret))
+                    {
+                        _clientID = clientID;
+                        _clientSecret = clientSecret;
+
+                        // Save the authentication data if the user checked the remember me checkbox
+                        if (rememberMeCheckBox.Checked)
+                        {
+                            AuthHelper.SaveAuthData(clientID, clientSecret);
+                        }
+                    }
+
+                    if (!relogin)
+                    {
+                        _processing = false;
+                        MessageBox.Show("Login successful!");
+                        // Put focus on the generate button
+                        generateButton.Focus();
+                        // Disable the login fields
+                        clientIdTextBox.Enabled = false;
+                        clientSecretTextBox.Enabled = false;
+                        rememberMeCheckBox.Enabled = false;
+                    }
+
+                    // Store the access token in-memory
                     _accessToken = accessToken;
                 }
                 else if (jsonResponse.ContainsKey("error"))
                 {
-                    MessageBox.Show("Login failed: " + jsonResponse["error"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+                    if (!relogin && jsonResponse["error"].Contains("unauthorized_client"))
+                    {
+                        MessageBox.Show("Login failed: " + jsonResponse["error_description"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    else if (!relogin)
+                    {
+                        MessageBox.Show("Login failed: " + jsonResponse["error"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Automatic re-login failed: " + jsonResponse["error"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
                     LoginButton.Enabled = true;
                 }
                 else
@@ -533,7 +653,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
 
         private async void Generate_Click(object sender, EventArgs e)
         {
-            // Check if the user is logged in
+            // Check if the user is logged in and if access token is available
             if (string.IsNullOrWhiteSpace(_accessToken))
             {
                 MessageBox.Show("Please login first!");
@@ -547,57 +667,86 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                 return;
             }
 
-            // Check if the API server is reachable 
-            // if (!await _trueBarSubtitlerAPI.IsApiServerReachableAsync())
-            // {
-            //     MessageBox.Show("No internet connection!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            //     return;
-            // }
+            if (!await _trueBarSubtitlerAPI.CheckTokenValidity(_accessToken))
+            {
+                // relogin
+                await Login(_clientID, _clientSecret, true);
+            }
 
-            
+            // Check if the API server is reachable 
+            if (!await _trueBarSubtitlerAPI.IsApiServerReachableAsync())
+            {
+                MessageBox.Show("API is not reachable!", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+
             _processing = true;
             // Disable the generate button while the request is in progress
-            generate.Enabled = false;
+            generateButton.Enabled = false;
+            LoginButton.Enabled = false;
             progressBar1.Visible = true;
             progressBar1.Style = ProgressBarStyle.Marquee;
             label4.Text = "Generating WAV file...";
-            
+
             // Check if the the uploaded file is .wav, if not, convert it to .wav
             _audioFileName = _videoFileName != null ? GenerateWavFile(_videoFileName, _audioTrackNumber) : null;
 
             try
             {
-                string response = await _trueBarSubtitlerAPI.UploadFileAsync(_accessToken, _audioFileName, checkBox1.Checked, checkBox2.Checked, checkBox3.Checked, checkBox4.Checked);
+                label4.Text = "Uploading...";
+                string response = await _trueBarSubtitlerAPI.UploadFileAsync(_accessToken, _audioFileName, voiceActivityDetectionCheckBox.Checked, punctuationCheckBox.Checked, denormalizationCheckBox.Checked, speakerChangeCheckBox.Checked);
                 var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
 
                 if (jsonResponse.ContainsKey("job_id"))
                 {
                     // Store the session ID in-memory
                     _jobId = jsonResponse["job_id"];
-                    label4.Text = "Uploading...";
                     _statusCheckTimer.Start();
                 }
                 else if (jsonResponse.ContainsKey("error"))
                 {
+                    label4.Text = "Failed";
+                    // Check if the token is expired and re-login
+                    if (jsonResponse["error"].Contains("Unauthorized"))
+                    {
+                        // try to re-login
+                        // await Login(_clientID, _clientSecret, true);
+                        // Retry the generate button click (!possible infinite loop)
+                        // Generate_Click(sender, e);
+                        MessageBox.Show("Session expired. Please login again!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        LoginButton.Text = "Login";
+                        _processing = false;
+                        generateButton.Enabled = true;
+                        progressBar1.Visible = false;
+
+                        return;
+                    }
+
                     MessageBox.Show("Upload failed: " + jsonResponse["error"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     _processing = false;
-                    generate.Enabled = true;
+                    generateButton.Enabled = true;
+                    LoginButton.Enabled = true;
                     progressBar1.Visible = false;
                 }
                 else
                 {
                     MessageBox.Show("Unexpected response: " + response, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    label4.Text = "Failed";
                     _processing = false;
-                    generate.Enabled = true;
+                    generateButton.Enabled = true;
                     progressBar1.Visible = false;
+                    LoginButton.Enabled = true;
                 }
             }
             catch (Exception ex)
             {
+                label4.Text = "Failed";
                 MessageBox.Show("Error processing response: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 _processing = false;
-                generate.Enabled = true;
+                generateButton.Enabled = true;
                 progressBar1.Visible = false;
+                LoginButton.Enabled = true;
             }
         }
 
@@ -645,10 +794,22 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             {
                 // Call the API to check the transcription job status
                 var statusResponse = await _trueBarSubtitlerAPI.CheckJobStatus(_accessToken, _jobId);
+                // Deserialize the response
+                var statusResponseJson = JsonConvert.DeserializeObject<dynamic>(statusResponse);
+
+                // TODO: rewrite the status check logic
 
                 // Check if the response is successful
-                if (!statusResponse.Contains("status"))
+                if (statusResponseJson.status == null)
                 {
+                    // First check if the token is expired and re-login
+                    if (statusResponse.Contains("Unauthorized"))
+                    {
+                        // try to re-login
+                        await Login(_clientID, _clientSecret, true);
+                        return;
+                    }
+
                     // Stop the timer and show an error message
                     _statusCheckTimer.Stop();
                     _processing = false;
@@ -668,12 +829,12 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                         MessageBox.Show("Unexpected response: " + statusResponse, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
 
-                    generate.Enabled = true; // Re-enable the generate button
+                    generateButton.Enabled = true; // Re-enable the generate button
                     return;
                 }
 
                 progressBar1.Style = ProgressBarStyle.Marquee;
-                var transcriptionStatus = CheckTranscriptionStatus(statusResponse);
+                var transcriptionStatus = statusResponseJson.status.ToString();
 
                 switch (transcriptionStatus)
                 {
@@ -690,11 +851,12 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                         GetSubtitlesFromResponse(statusResponse);
                         break;
                     case "failed":
-                        _statusCheckTimer.Stop(); 
+                        _statusCheckTimer.Stop();
                         _processing = false;
                         progressBar1.Visible = false;
                         MessageBox.Show("Transcription failed!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        generate.Enabled = true;
+                        generateButton.Enabled = true;
+                        LoginButton.Enabled = true;
                         break;
                     default:
                         // Handle other statuses
@@ -790,8 +952,6 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             // open the True-bar website
             UiUtil.OpenUrl("https://vitasis.si/products/truebar");
         }
-
-
     }
 }
 

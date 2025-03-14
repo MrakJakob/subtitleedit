@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,12 +22,45 @@ namespace Nikse.SubtitleEdit.Controls.Interfaces
         {
             try
             {
-                var response = await _httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, "https://staging-subtitler.true-bar.si/"));
+                var response = await _httpClient.GetAsync("https://staging-subtitler.true-bar.si/");
                 return response.IsSuccessStatusCode;
             }
             catch
             {
                 return false; // If an exception occurs, assume the server is unreachable
+            }
+        }
+
+        // Reference: https://stackoverflow.com/questions/2031824/what-is-the-best-way-to-check-for-internet-connectivity-using-net
+        public async Task<bool> CheckForInternetConnection(int timeoutMs = 10000)
+        {
+            try
+            {
+                var url = "http://www.gstatic.com/generate_204";
+
+                var request = (HttpWebRequest)WebRequest.Create(url);
+                request.KeepAlive = false;
+                request.Timeout = timeoutMs;
+                
+                using (var response = (HttpWebResponse)await request.GetResponseAsync())
+                {
+                    return response.StatusCode == HttpStatusCode.NoContent;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> CheckTokenValidity(string access_token) {
+            try {
+                _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", access_token);
+                var response = await _httpClient.GetAsync("https://staging-subtitler.true-bar.si/v1/healthcheck");
+                return response.IsSuccessStatusCode;
+            }
+            catch {
+                return false;
             }
         }
 
@@ -99,20 +133,26 @@ namespace Nikse.SubtitleEdit.Controls.Interfaces
             }
         }
 
-        public async Task<string> CheckJobStatus(string access_token, string job_id) {
-            try {
+        public async Task<string> CheckJobStatus(string access_token, string job_id)
+        {
+            try
+            {
                 _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", access_token);
                 var response = await _httpClient.GetAsync($"https://staging-subtitler.true-bar.si/v1/operations/{job_id}");
 
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadAsStringAsync();
-            } catch (HttpRequestException ex) {
+            }
+            catch (HttpRequestException ex)
+            {
                 // Handle HTTP errors
                 return $"{{\"error\": \"{ex.Message}\"}}";
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 // Handle other errors
                 return $"{{\"error\": \"{ex.Message}\"}}";
             }
         }
-    }   
+    }
 }

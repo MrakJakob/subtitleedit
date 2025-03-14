@@ -297,6 +297,7 @@
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="NHunspell" />
     <PackageReference Include="System.Security.AccessControl" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
     <PackageReference Include="System.Security.Principal.Windows" />
     <PackageReference Include="Vosk" />
   </ItemGroup>
