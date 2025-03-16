@@ -23,8 +23,6 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
         private readonly string _videoFileName;
         private string _audioFileName;
         private readonly Subtitle _subtitle;
-        private readonly bool _isVideo;
-        private readonly bool _isAudio;
         private readonly int _audioTrackNumber;
         private readonly Form _parentForm;
         private string _accessToken;
@@ -35,7 +33,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
         private readonly TrueBarSubtitlerAPI _trueBarSubtitlerAPI;
         bool _processing = false;
         private readonly List<string> _filesToDelete;
-        bool _isUserLoggedIn = false;
+        private bool _useCenterChannelOnly;
         private Button generateButton;
         private Label infoLabel;
         private Button LoginButton;
@@ -77,7 +75,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
 
             _filesToDelete = new List<string>();
             CheckIfAuthenticated();
-            
+
             clientIdTextBox.KeyDown += TextBox_KeyDown;
             clientSecretTextBox.KeyDown += TextBox_KeyDown;
         }
@@ -354,6 +352,13 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
 
         }
 
+        private void UpdateState() {
+            generateButton.Enabled = !_processing;
+            LoginButton.Enabled = !_processing;
+            progressBar1.Visible = _processing;
+        }
+
+
         // THIS CODE IS REUSED FROM THE WHISPER AUDIO TO TEXT FORM (START)
         private Process GetFfmpegProcess(string videoFileName, int audioTrackNumber, string outWaveFile)
         {
@@ -371,11 +376,12 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             // TODO: handle center channel only
             // labelFC.Text = string.Empty;
             var fFmpegWaveTranscodeSettings = "-i \"{0}\" -vn -ar 16000 -ac 1 -ab 32k -af volume=1.75 -f wav {2} \"{1}\"";
-            // if (_useCenterChannelOnly)
-            // {
-            //     fFmpegWaveTranscodeSettings = "-i \"{0}\" -vn -ar 16000 -ab 32k -af volume=1.75 -af \"pan=mono|c0=FC\" -f wav {2} \"{1}\"";
-            //     labelFC.Text = "FC";
-            // }
+            
+            if (_useCenterChannelOnly)
+            {
+                fFmpegWaveTranscodeSettings = "-i \"{0}\" -vn -ar 16000 -ab 32k -af volume=1.75 -af \"pan=mono|c0=FC\" -f wav {2} \"{1}\"";
+                // labelFC.Text = "FC";
+            }
 
             //-i indicates the input
             //-vn means no video output
@@ -437,7 +443,6 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             process.BeginErrorReadLine();
 
             double seconds = 0;
-            // buttonCancel.Visible = true;
             try
             {
                 process.PriorityClass = ProcessPriorityClass.Normal;
@@ -475,9 +480,9 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                         {
                             if (drive.AvailableFreeSpace < 50 * 1000000) // 50 mb
                             {
-                                // TODO: handle low disk space
-                                // labelInfo.ForeColor = Color.Red;
-                                // labelInfo.Text = LanguageSettings.Current.AddWaveform.LowDiskSpace;
+                                // handle low disk space
+                                MessageBox.Show("Low disk space on drive: " + targetDriveLetter);
+                                break;
                             }
                         }
                     }
@@ -575,8 +580,6 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                 return;
             }
 
-            // TODO: handle session expiration
-
             await Login(clientIdTextBox.Text, clientSecretTextBox.Text);
         }
 
@@ -648,6 +651,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             catch (Exception ex)
             {
                 MessageBox.Show("Error processing response: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                LoginButton.Enabled = true;
             }
         }
 
@@ -683,11 +687,12 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
 
             _processing = true;
             // Disable the generate button while the request is in progress
-            generateButton.Enabled = false;
-            LoginButton.Enabled = false;
-            progressBar1.Visible = true;
+            UpdateState();
             progressBar1.Style = ProgressBarStyle.Marquee;
             label4.Text = "Generating WAV file...";
+
+            _useCenterChannelOnly = Configuration.Settings.General.FFmpegUseCenterChannelOnly &&
+                        FfmpegMediaInfo.Parse(_videoFileName).HasFrontCenterAudio(_audioTrackNumber);
 
             // Check if the the uploaded file is .wav, if not, convert it to .wav
             _audioFileName = _videoFileName != null ? GenerateWavFile(_videoFileName, _audioTrackNumber) : null;
@@ -717,26 +722,20 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                         MessageBox.Show("Session expired. Please login again!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         LoginButton.Text = "Login";
                         _processing = false;
-                        generateButton.Enabled = true;
-                        progressBar1.Visible = false;
-
+                        UpdateState();
                         return;
                     }
 
                     MessageBox.Show("Upload failed: " + jsonResponse["error"], "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     _processing = false;
-                    generateButton.Enabled = true;
-                    LoginButton.Enabled = true;
-                    progressBar1.Visible = false;
+                    UpdateState();
                 }
                 else
                 {
                     MessageBox.Show("Unexpected response: " + response, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     label4.Text = "Failed";
                     _processing = false;
-                    generateButton.Enabled = true;
-                    progressBar1.Visible = false;
-                    LoginButton.Enabled = true;
+                    UpdateState();
                 }
             }
             catch (Exception ex)
@@ -744,9 +743,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                 label4.Text = "Failed";
                 MessageBox.Show("Error processing response: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 _processing = false;
-                generateButton.Enabled = true;
-                progressBar1.Visible = false;
-                LoginButton.Enabled = true;
+                UpdateState();
             }
         }
 
@@ -813,7 +810,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                     // Stop the timer and show an error message
                     _statusCheckTimer.Stop();
                     _processing = false;
-                    progressBar1.Visible = false;
+                    UpdateState();
                     label4.Text = "Failed";
 
                     if (string.IsNullOrWhiteSpace(statusResponse))
@@ -828,8 +825,6 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                     {
                         MessageBox.Show("Unexpected response: " + statusResponse, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
-
-                    generateButton.Enabled = true; // Re-enable the generate button
                     return;
                 }
 
@@ -853,10 +848,8 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
                     case "failed":
                         _statusCheckTimer.Stop();
                         _processing = false;
-                        progressBar1.Visible = false;
+                        UpdateState();
                         MessageBox.Show("Transcription failed!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        generateButton.Enabled = true;
-                        LoginButton.Enabled = true;
                         break;
                     default:
                         // Handle other statuses
@@ -869,6 +862,7 @@ namespace Nikse.SubtitleEdit.Forms.AudioToText
             {
                 _statusCheckTimer.Stop(); // Stop the timer on error
                 _processing = false;
+                UpdateState();
                 MessageBox.Show($"An error occurred while checking the status: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
